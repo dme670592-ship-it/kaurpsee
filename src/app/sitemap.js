@@ -1,5 +1,4 @@
-import { dbConnect } from "@/lib/db";
-import Room from "@/models/Room";
+import { listRooms } from "@/lib/mockStore";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://basera.app";
 
@@ -13,21 +12,13 @@ export default async function sitemap() {
     { url: `${BASE_URL}/register`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
   ];
 
-  let roomRoutes = [];
-  try {
-    await dbConnect();
-    const rooms = await Room.find({ available: true })
-      .select("_id updatedAt")
-      .sort({ updatedAt: -1 })
-      .limit(5000)
-      .lean();
-    roomRoutes = rooms.map((r) => ({
-      url: `${BASE_URL}/rooms/${r._id}`,
-      lastModified: r.updatedAt || now,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    }));
-  } catch {}
+  const rooms = listRooms({ available: true }).slice(0, 5000);
+  const roomRoutes = rooms.map((r) => ({
+    url: `${BASE_URL}/rooms/${r._id}`,
+    lastModified: r.updatedAt ? new Date(r.updatedAt) : now,
+    changeFrequency: "weekly",
+    priority: 0.7,
+  }));
 
   return [...staticRoutes, ...roomRoutes];
 }

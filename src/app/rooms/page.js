@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { dbConnect } from "@/lib/db";
-import Room, { LOCALITIES, ROOM_TYPES, GENDERS } from "@/models/Room";
-import User from "@/models/User";
+import { LOCALITIES, ROOM_TYPES, GENDERS } from "@/models/Room";
+import { paginateRooms, getSavedIds, clone } from "@/lib/mockStore";
 import RoomFilters from "@/components/RoomFilters";
 import RoomList from "@/components/RoomList";
 import { getCurrentUser } from "@/lib/auth";
@@ -12,38 +11,20 @@ const PAGE_SIZE = 12;
 
 export default async function RoomsPage({ searchParams }) {
   const sp = searchParams || {};
-  const q = { available: true };
-  if (sp.locality) q.locality = sp.locality;
-  if (sp.roomType) q.roomType = sp.roomType;
-  if (sp.gender) q.gender = sp.gender;
-  if (sp.minPrice || sp.maxPrice) {
-    q.price = {};
-    if (sp.minPrice) q.price.$gte = Number(sp.minPrice);
-    if (sp.maxPrice) q.price.$lte = Number(sp.maxPrice);
-  }
-  if (sp.q) q.$or = [
-    { title: { $regex: sp.q, $options: "i" } },
-    { description: { $regex: sp.q, $options: "i" } },
-  ];
+  const filter = { available: true };
+  if (sp.locality) filter.locality = sp.locality;
+  if (sp.roomType) filter.roomType = sp.roomType;
+  if (sp.gender) filter.gender = sp.gender;
+  if (sp.minPrice) filter.minPrice = Number(sp.minPrice);
+  if (sp.maxPrice) filter.maxPrice = Number(sp.maxPrice);
+  if (sp.q) filter.search = sp.q;
 
-  let rooms = [];
-  let nextCursor = null;
+  const { rooms: pageRooms, nextCursor } = paginateRooms(filter, { limit: PAGE_SIZE });
+  const rooms = pageRooms.map(clone);
+
   let savedIds = [];
-  try {
-    await dbConnect();
-    const docs = await Room.find(q).sort({ _id: -1 }).limit(PAGE_SIZE + 1).lean();
-    const hasMore = docs.length > PAGE_SIZE;
-    rooms = (hasMore ? docs.slice(0, PAGE_SIZE) : docs).map((r) =>
-      JSON.parse(JSON.stringify(r))
-    );
-    nextCursor = hasMore ? String(rooms[rooms.length - 1]._id) : null;
-
-    const user = getCurrentUser();
-    if (user) {
-      const u = await User.findById(user.id).select("savedRooms").lean();
-      savedIds = (u?.savedRooms || []).map((id) => String(id));
-    }
-  } catch {}
+  const user = getCurrentUser();
+  if (user) savedIds = getSavedIds(user.id);
 
   // Build query object for client load-more
   const queryForClient = {};

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import User from "@/models/User";
+import { findUserByEmail, createUser } from "@/lib/mockStore";
 import { hashPassword, signToken, setAuthCookie } from "@/lib/auth";
 
 export async function POST(req) {
@@ -13,13 +12,12 @@ export async function POST(req) {
     if (!["seeker", "owner"].includes(role))
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
 
-    await dbConnect();
-    const exists = await User.findOne({ email: email.toLowerCase() });
+    const exists = findUserByEmail(email);
     if (exists) return NextResponse.json({ error: "Email already registered" }, { status: 409 });
 
     const hash = await hashPassword(password);
-    const user = await User.create({ name, email: email.toLowerCase(), password: hash, phone, role });
-    const token = signToken({ id: user._id.toString(), email: user.email, role: user.role, name: user.name });
+    const user = createUser({ name, email, password: hash, phone, role });
+    const token = signToken({ id: String(user._id), email: user.email, role: user.role, name: user.name });
     setAuthCookie(token);
     return NextResponse.json({ user: { id: user._id, name, email, role, phone } });
   } catch (e) {

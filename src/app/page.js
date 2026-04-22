@@ -1,17 +1,15 @@
 import Link from "next/link";
-import { dbConnect } from "@/lib/db";
-import Room, { LOCALITIES } from "@/models/Room";
+import { LOCALITIES } from "@/models/Room";
+import { listRooms, clone } from "@/lib/mockStore";
 import RoomCard from "@/components/RoomCard";
 import HeroSearch from "@/components/HeroSearch";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  let featured = [];
-  try {
-    await dbConnect();
-    featured = await Room.find({ available: true }).sort({ createdAt: -1 }).limit(6).lean();
-  } catch {}
+  const allAvailable = listRooms({ available: true });
+  const featured = allAvailable.slice(0, 6).map(clone);
+  const totalRooms = allAvailable.length;
 
   return (
     <div className="space-y-16 md:space-y-24">
@@ -54,7 +52,7 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-10 flex flex-wrap items-center gap-6 text-sm text-ink-muted">
-            <Stat n={featured.length || "—"} label="Live rooms" />
+            <Stat n={totalRooms || "—"} label="Live rooms" />
             <span className="h-4 w-px bg-line" />
             <Stat n={LOCALITIES.length} label="Localities" />
             <span className="h-4 w-px bg-line" />
@@ -104,7 +102,7 @@ export default async function HomePage() {
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {featured.map((r) => (
-              <RoomCard key={r._id.toString()} room={JSON.parse(JSON.stringify(r))} />
+              <RoomCard key={r._id} room={r} />
             ))}
           </div>
         )}

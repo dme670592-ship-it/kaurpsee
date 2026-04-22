@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import mongoose from "mongoose";
-import { dbConnect } from "@/lib/db";
-import Room from "@/models/Room";
+import { getRoomById, clone } from "@/lib/mockStore";
 import { getCurrentUser } from "@/lib/auth";
 import ListingWizard from "@/components/ListingWizard";
 
@@ -11,10 +9,8 @@ export const dynamic = "force-dynamic";
 export default async function EditListingPage({ params }) {
   const user = getCurrentUser();
   if (!user) redirect(`/login?next=/dashboard/${params.id}/edit`);
-  if (!mongoose.isValidObjectId(params.id)) notFound();
 
-  await dbConnect();
-  const room = await Room.findById(params.id).lean();
+  const room = getRoomById(params.id);
   if (!room) notFound();
   if (String(room.owner) !== String(user.id)) redirect("/dashboard");
 
@@ -28,7 +24,7 @@ export default async function EditListingPage({ params }) {
       <ListingWizard
         mode="edit"
         roomId={params.id}
-        initial={JSON.parse(JSON.stringify(room))}
+        initial={clone(room)}
       />
     </div>
   );
