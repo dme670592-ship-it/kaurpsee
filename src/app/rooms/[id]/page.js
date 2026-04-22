@@ -1,9 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import mongoose from "mongoose";
-import { dbConnect } from "@/lib/db";
-import Room from "@/models/Room";
-import User from "@/models/User";
+import { getRoomById, similarRooms, getSavedIds, clone } from "@/lib/mockStore";
 import RoomCard from "@/components/RoomCard";
 import RoomGallery from "@/components/RoomGallery";
 import SaveButton from "@/components/SaveButton";
@@ -19,74 +16,52 @@ function siteUrl() {
 }
 
 export async function generateMetadata({ params }) {
-  if (!mongoose.isValidObjectId(params.id)) {
-    return { title: "Room not found · BASERA" };
-  }
-  try {
-    await dbConnect();
-    const room = await Room.findById(params.id).lean();
-    if (!room) return { title: "Room not found · BASERA" };
+  const room = getRoomById(params.id);
+  if (!room) return { title: "Room not found · BASERA" };
 
-    const title = `${room.title} · ₹${room.price.toLocaleString("en-IN")}/mo in ${room.locality} · BASERA`;
-    const desc =
-      (room.description || "").slice(0, 160).replace(/\s+/g, " ").trim() ||
-      `${room.roomType} room in ${room.locality}, Srinagar Garhwal — ₹${room.price.toLocaleString("en-IN")}/mo. Contact owner directly on BASERA.`;
-    const image = room.images?.[0] || FALLBACK_OG;
-    const url = `${siteUrl()}/rooms/${params.id}`;
+  const title = `${room.title} · ₹${room.price.toLocaleString("en-IN")}/mo in ${room.locality} · BASERA`;
+  const desc =
+    (room.description || "").slice(0, 160).replace(/\s+/g, " ").trim() ||
+    `${room.roomType} room in ${room.locality}, Srinagar Garhwal — ₹${room.price.toLocaleString("en-IN")}/mo. Contact owner directly on BASERA.`;
+  const image = room.images?.[0] || FALLBACK_OG;
+  const url = `${siteUrl()}/rooms/${params.id}`;
 
-    return {
+  return {
+    title,
+    description: desc,
+    alternates: { canonical: url },
+    openGraph: {
       title,
       description: desc,
-      alternates: { canonical: url },
-      openGraph: {
-        title,
-        description: desc,
-        url,
-        type: "website",
-        images: [{ url: image, width: 1200, height: 630, alt: room.title }],
-      },
-      twitter: {
-        card: "summary_large_image",
-        title,
-        description: desc,
-        images: [image],
-      },
-    };
-  } catch {
-    return { title: "BASERA" };
-  }
+      url,
+      type: "website",
+      images: [{ url: image, width: 1200, height: 630, alt: room.title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description: desc,
+      images: [image],
+    },
+  };
 }
 
 export default async function RoomDetailPage({ params }) {
-  if (!mongoose.isValidObjectId(params.id)) notFound();
-  await dbConnect();
-  const room = await Room.findById(params.id).lean();
+  const room = getRoomById(params.id);
   if (!room) notFound();
 
   const currentUser = getCurrentUser();
   let isSaved = false;
   if (currentUser) {
-    const u = await User.findById(currentUser.id).select("savedRooms").lean();
-    isSaved = (u?.savedRooms || []).map(String).includes(String(room._id));
+    isSaved = getSavedIds(currentUser.id).includes(String(room._id));
   }
   const isOwner = currentUser && String(room.owner) === String(currentUser.id);
 
-  const similar = await Room.find({
-    _id: { $ne: room._id },
-    available: true,
-    $or: [
-      { locality: room.locality },
-      { roomType: room.roomType },
-      { price: { $gte: room.price * 0.7, $lte: room.price * 1.3 } },
-    ],
-  })
-    .sort({ createdAt: -1 })
-    .limit(4)
-    .lean();
+  const similar = similarRooms(room._id).map(clone);
 
   const phone = String(room.ownerPhone).replace(/\D/g, "");
   const waMsg = encodeURIComponent(`Hi ${room.ownerName}, I'm interested in your room "${room.title}" listed on BASERA.`);
-  const r = JSON.parse(JSON.stringify(room));
+  const r = clone(room);
 
   return (
     <div className="space-y-10">
@@ -190,7 +165,7 @@ export default async function RoomDetailPage({ params }) {
           <h2 className="mb-5 text-2xl font-bold tracking-tight">You might also like</h2>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {similar.map((s) => (
-              <RoomCard key={s._id.toString()} room={JSON.parse(JSON.stringify(s))} />
+              <RoomCard key={s._id} room={s} />
             ))}
           </div>
         </section>

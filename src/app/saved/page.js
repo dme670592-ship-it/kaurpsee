@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { dbConnect } from "@/lib/db";
-import Room from "@/models/Room";
-import User from "@/models/User";
+import { getSavedRooms, clone } from "@/lib/mockStore";
 import RoomCard from "@/components/RoomCard";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -17,15 +15,7 @@ export default async function SavedPage() {
   const user = getCurrentUser();
   if (!user) redirect("/login?next=/saved");
 
-  await dbConnect();
-  const u = await User.findById(user.id).select("savedRooms").lean();
-  const ids = (u?.savedRooms || []).map(String);
-
-  let rooms = [];
-  if (ids.length > 0) {
-    const docs = await Room.find({ _id: { $in: ids } }).sort({ createdAt: -1 }).lean();
-    rooms = docs.map((r) => JSON.parse(JSON.stringify(r)));
-  }
+  const rooms = getSavedRooms(user.id).map(clone);
 
   return (
     <div className="space-y-8" id="saved-page">

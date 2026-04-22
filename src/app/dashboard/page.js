@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { dbConnect } from "@/lib/db";
-import Room from "@/models/Room";
+import { listRooms, clone } from "@/lib/mockStore";
 import { getCurrentUser } from "@/lib/auth";
 import DashboardRow from "@/components/DashboardRow";
 
@@ -12,8 +11,7 @@ export default async function DashboardPage() {
   if (!user) redirect("/login?next=/dashboard");
   if (user.role !== "owner") redirect("/rooms");
 
-  await dbConnect();
-  const rooms = await Room.find({ owner: user.id }).sort({ createdAt: -1 }).lean();
+  const rooms = listRooms({ owner: user.id }).map(clone);
 
   const visible = rooms.filter((r) => r.available).length;
   const totalValue = rooms.reduce((s, r) => s + (r.price || 0), 0);
@@ -64,7 +62,7 @@ export default async function DashboardPage() {
               </thead>
               <tbody className="divide-y divide-line">
                 {rooms.map((r) => (
-                  <DashboardRow key={r._id.toString()} room={JSON.parse(JSON.stringify(r))} />
+                  <DashboardRow key={r._id} room={r} />
                 ))}
               </tbody>
             </table>
